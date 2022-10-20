@@ -9,25 +9,32 @@ mkdir -p "$HOME/build"
 # Build from source if needed
 mpr_path="$(find /srv/mendix/package -type f -maxdepth 1 -name \*.mpr | tail -n1)"
 mda_path="$HOME/data/model-upload/app.mda"
+mendix_version_path="$HOME/data/mendix_version"
 mxbuild_exe="$HOME/build/modeler/mxbuild.exe"
 
 
 if [ -n "$mpr_path" ]; then
     # Confirm mxbuild is present if not pull it in
     if [ ! -f "$mxbuild_exe" ]; then
-        VERSION="$(sqlite3 -newline '' $mpr_path 'select _ProductVersion from _MetaData;')"
-        MXBUILD_URL="https://cdn.mendix.com/runtime/mxbuild-${VERSION}.tar.gz"
+        if [ "$MENDIX_VERSION" = "" ]; then
+            MENDIX_VERSION="$(sqlite3 -newline '' $mpr_path 'select _ProductVersion from _MetaData;')"
+        else
+            echo "Using Mendix version override: $MENDIX_VERSION"
+        fi
+        MXBUILD_URL="https://cdn.mendix.com/runtime/mxbuild-${MENDIX_VERSION}.tar.gz"
         echo "Downloading mxbuild from $MXBUILD_URL"
         curl -SL "$MXBUILD_URL" | tar -zxC /srv/mendix/build
     fi
     JAVA="$(find /usr/lib/jvm -type f -name java | head -n1)"
     JAVA_HOME="$(dirname $(dirname $JAVA))"
     echo "Building MDA from source"
-    mono "$mxbuild_exe" --target=package --java-home="$JAVA_HOME" --java-exe-path="$JAVA" --output="$mda_path" $mpr_path
+    mono "$mxbuild_exe" --target=package --java-home="$JAVA_HOME" --java-exe-path="$JAVA" --output="$mda_path" --loose-version-check $mpr_path
 else
     echo "Package is already in MDA format"
     mda_path_tmp="$(find /srv/mendix/package -maxdepth 1 -type f -name \*.mda | tail -n1)"
     mv "$mda_path_tmp" "$mda_path"
 fi
 
+echo "$MENDIX_VERSION" > $mendix_version_path
+echo "Mendix version is located at: $mendix_version_path"
 echo "MDA is located at: $mda_path"
